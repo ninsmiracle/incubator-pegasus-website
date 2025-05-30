@@ -30,14 +30,14 @@ drop命令用于删除一个表，通过`-r`选项指定数据的保留时间，
 ## 过期表数据的物理删除
 过期表的数据在各个replica server上也未必能立即被物理删除，因为：
 * 表的保留时间过期后，只有通过shell设置了`set_meta_level lively`，使meta server进入[负载均衡模式](rebalance#控制集群的负载均衡)，meta server才会通过`config_sync`RPC通知replica server删除相关的replica。而replica server在收到meta server的通知后，就会将需删除的replica文件夹通过添加`.gar`后缀进行重命名，表示这是可以被删除的垃圾数据。但此时数据仍未被真正物理删除。
-* replica server会定期（配置文件`disk_stat_interval_seconds`）扫描各个数据文件夹（配置文件`data_dirs`），统计文件夹的使用情况。对于标记为`.gar`后缀的replica文件夹，获取其最后修改时间，并和当前时间进行比较，只有当两者时间差超过了阈值（配置文件`gc_disk_garbage_replica_interval_seconds`）后，在会将文件夹删除掉。此时数据才算被真正物理删除。
+* replica server会定期（配置文件`disk_stat_interval_seconds`，默认为600秒）扫描各个数据文件夹（配置文件`data_dirs`），统计文件夹的使用情况。对于标记为`.gar`后缀的replica文件夹，获取其最后修改时间，并和当前时间进行比较，只有当两者时间差超过了阈值（配置文件`gc_disk_garbage_replica_interval_seconds`，默认1天）后，在会将文件夹删除掉。此时数据才算被真正物理删除。
 
 所以综上所述，能够影响表被删除后进行物理删除的时间点的配置项包括：
 * `[meta_server] hold_seconds_for_dropped_app`：当drop表没有指定`-r`选项时，决定该表的保留时间。
 * `[replication] disk_stat_interval_seconds`：replica server定期扫描各个数据文件夹的时间间隔。
 * `[replication] gc_disk_garbage_replica_interval_seconds`：垃圾replica文件夹的最后修改时间距离当前时间超过这个阈值，文件夹才会被删除。
 
-如果遇到需要紧急删除数据以释放磁盘空间，但是又不方便重启replica server更新配置的情况，可以根据表ID进行手工暴力删除，但是千万注意：
+如果遇到需要紧急删除数据以释放磁盘空间，但是又不方便重启replica server更新配置的情况，可以登入Pegasus所部署的节点，根据表ID进行手动强制删除，但是千万注意：
 * 不到万不得已，不要进行手工暴力删表，避免误操作。
 * 坚决只能删除**过期表**的数据。
 * 不要误删其他表的数据。
